@@ -48,6 +48,7 @@ _trakt = {
         'baseurl'       :       'https://api.trakt.tv', # Sandbox environment https://api-staging.trakt.tv,
         'config_parser' :       '', # configparser.ConfigParser object 
         'config_path'   :       '', # path of config file 
+        'username'      :       ''  # username
 }
 
 _headers = {
@@ -156,8 +157,7 @@ def read_config(options):
 def write_csv(options, results):
         """Write list output into a CSV file format
         """
-        if options.verbose:
-                print("CSV output file: {0}".format(options.output))
+        print("Writing to: {0}".format(options.output))
         # Write result CSV, works with windows now
         with open(options.output, 'w', encoding = 'utf-8', newline='') as fp:
                 mycsv = csv.DictWriter(fp, fieldnames=list(results[0].keys()), quoting=csv.QUOTE_ALL)
@@ -239,7 +239,7 @@ def api_get_userlists(options, page):
         """Get list of all user lists
         """
         url = _trakt['baseurl'] + '/users/{user}/lists'.format(
-                            user=options.userlist, page=page, limit=1000)
+                            user=_trakt['username'], page=page, limit=1000)
         #url = _trakt['baseurl'] + '/users/{user}/lists/{list_id}?page={page}&limit={limit}'.format(
         #                    list=options.list, type=options.type, page=page, limit=1000)
         return api_get_request(options, url, page)
@@ -248,7 +248,7 @@ def api_get_userlist(options, page):
         """Get items of user list by type
         """
         url = _trakt['baseurl'] + '/users/{user}/lists/{list_id}/items/{type}?page={page}&limit={limit}'.format(
-                            user=options.userlist, list_id=options.listid, type=options.type, page=page, limit=1000)
+                            user=_trakt['username'], list_id=options.listid, type=options.type, page=page, limit=1000)
         return api_get_request(options, url, page)
 
 # TODO: Not sure if removing from list works 
@@ -429,7 +429,7 @@ def main():
                       choices=['watchlist', 'collection', 'history'], dest='list', default='history')
         parser.add_argument('-u', '--userlist',
                       help='allow to export a user custom list, default %(default)s',
-                      dest='userlist', default=None)
+                      dest='userlist', default=False, action='store_true')
         parser.add_argument('-C', '--clean',
                       help='empty list after export, default %(default)s',
                       default=False, action='store_true', dest='clean')
