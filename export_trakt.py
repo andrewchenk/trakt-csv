@@ -74,7 +74,7 @@ _proxyDict = {
 
 response_arr = []
 
-def read_config(options):
+def read_config(_trakt, options):
         """Read config file and if provided overwrite default values.
         If no config file exist, create one with default values.
         """
@@ -196,6 +196,40 @@ def api_auth(options):
             print('Saved as "access_token" in file {0}: {1}'.format(options.config, response["access_token"]))
             print('Saved as "refresh_token" in file {0}: {1}'.format(options.config, response["refresh_token"]))
 
+def api_auth_refresh(_trakt, options): 
+        ## Try refreshing to get new access token. If it doesn't work, user needs to authenticate again.
+        if _trakt['refresh_token']: 
+            values = {
+                    "refresh_token": _trakt['refresh_token'],
+                    "client_id": _trakt['client_id'],
+                    "client_secret": _trakt["client_secret"],
+                    "redirect_uri": "urn:ietf:wg:oauth:2.0:oob",
+                    "grant_type": "refresh_token"
+            }
+
+            url = _trakt['baseurl'] + '/oauth/token'
+            r = requests.post(url, data=values)
+            print(r.status_code)
+            if r.status_code == 200: 
+                response = r.json()
+                _trakt['access_token'] = response["access_token"]
+                _trakt['refresh_token'] = response["refresh_token"]
+                _headers['Authorization'] = 'Bearer ' + response["access_token"]
+                _headers['trakt-api-key'] = _trakt['client_id']
+                config = _trakt['config_parser']
+                config.set('TRAKT', 'ACCESS_TOKEN', response["access_token"])
+                config.set('TRAKT', 'REFRESH_TOKEN', response["refresh_token"])
+                with open(options.config, 'w') as configfile:
+                    config.write(configfile)
+                    print('Saved as "access_token" in file {0}: {1}'.format(options.config, response["access_token"]))
+                    print('Saved as "refresh_token" in file {0}: {1}'.format(options.config, response["refresh_token"]))
+            else:
+                print("Refreshing access_token failed. Get new refresh_token and access_token by manually authenticating again")
+                api_auth(options) 
+        else:   
+            print("No refresh_token found in config file. Get new refresh_token and access_token by manually authenticating again")
+            api_auth(options) 
+
 def api_get_request(options, url, page): 
     """Uses Trakt API to sends a request to the URL given and returns the results as a response array, starting with page.
     """
@@ -207,6 +241,7 @@ def api_get_request(options, url, page):
     else:
         r = requests.get(url, headers=_headers, timeout=(5, 60))
     #pp.pprint(r.headers) 
+    # print(json.loads(r.text))
     if r.status_code != 200:
         print("Error fetching GET response for {list}: {status} [{text}]".format(
                 list=options.list, status=r.status_code, text=r.text))
@@ -214,6 +249,8 @@ def api_get_request(options, url, page):
     else:
         global response_arr
         response_arr += json.loads(r.text)
+        if len(response_arr) == 0: 
+            print("Status code good, but response is empty! Maybe reauthenticate manually: delete refresh_token in config.ini")
 
     # if 'X-Pagination-Page-Count'in r.headers and r.headers['X-Pagination-Page-Count'] != "0":
     if 'X-Pagination-Page-Count'in r.headers and r.headers['X-Pagination-Page-Count']:
@@ -224,8 +261,8 @@ def api_get_request(options, url, page):
         print("Fetched page {page} of {PageCount} pages for {list}".format(
                 page=page, PageCount=r.headers['X-Pagination-Page-Count'], list=options.list))
         if page != int(r.headers['X-Pagination-Page-Count']):
-            api_get_request(options, page + 1)
-
+            api_get_request(options, url, page + 1)
+    # print(response_arr)
     return response_arr
 
 def api_get_list(options, page):
@@ -459,40 +496,10 @@ def main():
             options.output = 'export_{type}_{list}.csv'.format(type=options.type, list=options.list)
 
         ## Read configuration and validate
-        config = read_config(options)
+        config = read_config(_trakt, options)
 
-        ## Try refreshing to get new access token. If it doesn't work, user needs to authenticate again.
-        if _trakt['refresh_token']: 
-            values = {
-                    "refresh_token": _trakt['refresh_token'],
-                    "client_id": _trakt['client_id'],
-                    "client_secret": _trakt["client_secret"],
-                    "redirect_uri": "urn:ietf:wg:oauth:2.0:oob",
-                    "grant_type": "refresh_token"
-            }
-
-            url = _trakt['baseurl'] + '/oauth/token'
-            r = requests.post(url, data=values)
-            print(r.status_code)
-            if r.status_code == 200: 
-                response = r.json()
-                _trakt['access_token'] = response["access_token"]
-                _trakt['refresh_token'] = response["refresh_token"]
-                _headers['Authorization'] = 'Bearer ' + response["access_token"]
-                _headers['trakt-api-key'] = _trakt['client_id']
-                config = _trakt['config_parser']
-                config.set('TRAKT', 'ACCESS_TOKEN', response["access_token"])
-                config.set('TRAKT', 'REFRESH_TOKEN', response["refresh_token"])
-                with open(options.config, 'w') as configfile:
-                    config.write(configfile)
-                    print('Saved as "access_token" in file {0}: {1}'.format(options.config, response["access_token"]))
-                    print('Saved as "refresh_token" in file {0}: {1}'.format(options.config, response["refresh_token"]))
-            else:
-                print("Refreshing access_token failed. Get new refresh_token and access_token by manually authenticating again")
-                api_auth(options) 
-        else:   
-            print("No refresh_token found in config file. Get new refresh_token and access_token by manually authenticating again")
-            api_auth(options) 
+        ## Try refreshing to get new access token. If it doesn't work, user needs to authenticate again. 
+        api_auth_refresh(_trakt, options)
 
         ## Display debug information
         if options.verbose:
@@ -503,6 +510,8 @@ def main():
         ## Get Trakt user lists (custom lists)
         if options.userlist:
             export_data = api_get_userlists(options, 1)
+            #print("export data")
+            #print(export_data)
             if export_data:
                 print("Found {0} user list(s)".format(len(export_data)))
                 print("")
@@ -525,7 +534,6 @@ def main():
                         export_data = api_get_userlist(options, 1)
                         options.output = data['name'] + ".csv"
                         process_export_data(options, export_data)
-
                 else:
                     options.list = data['user']['username'] + "'s user list with id: '" + options.listid + "'"
                     response_arr = []

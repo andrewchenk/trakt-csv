@@ -27,9 +27,10 @@ try:
 except:
         sys.exit("Please use your favorite method to install the following module requests and simplejson to use this script")
 
+import helpers
 import argparse
 import configparser
-import datetime
+from datetime import datetime
 import collections
 import pprint
 
@@ -48,6 +49,7 @@ _trakt = {
         'baseurl'       :       'https://api.trakt.tv', # Sandbox environment https://api-staging.trakt.tv,
         'config_parser' :       '', # configparser.ConfigParser object 
         'config_path'   :       '', # path of config file 
+        'username'      :       ''  # username
 }
 
 _headers = {
@@ -74,9 +76,8 @@ _proxyDict = {
 response_arr = []
 
 def read_config(options):
-        """
-        Read config file and if provided overwrite default values
-        If no config file exist, create one with default values
+        """Read config file and if provided overwrite default values.
+        If no config file exist, create one with default values.
         """
         global work_dir
         work_dir = ''
@@ -87,8 +88,7 @@ def read_config(options):
         _configfile = os.path.join(work_dir, options.config)
         if os.path.exists(options.config):
                 _configfile = options.config
-        if options.verbose:
-                print("Config file: {0}".format(_configfile))
+        print("Config file: {0}".format(_configfile))
         # For recording configparser 
         config = "" 
         if os.path.exists(_configfile):
@@ -104,6 +104,11 @@ def read_config(options):
                                 _trakt['client_secret'] = config.get('TRAKT','CLIENT_SECRET')
                         else:
                                 print('Error, you must specify a trakt.tv CLIENT_SECRET')
+                                sys.exit(1)
+                        if config.has_option('TRAKT','USERNAME') and len(config.get('TRAKT','USERNAME')) != 0:
+                                _trakt['username'] = config.get('TRAKT','username')
+                        else:
+                                print('Error, you must specify a trakt.tv username for user lists to work')
                                 sys.exit(1)
                         if config.has_option('TRAKT','ACCESS_TOKEN') and len(config.get('TRAKT','ACCESS_TOKEN')) != 0:
                                 _trakt['access_token'] = config.get('TRAKT','ACCESS_TOKEN')
@@ -132,6 +137,7 @@ def read_config(options):
                         config.add_section('TRAKT')
                         config.set('TRAKT', 'CLIENT_ID', '')
                         config.set('TRAKT', 'CLIENT_SECRET', '')
+                        config.set('TRAKT', 'USERNAME', '')
                         config.set('TRAKT', 'ACCESS_TOKEN', '')
                         config.set('TRAKT', 'REFRESH_TOKEN', '')
                         config.set('TRAKT', 'BASEURL', 'https://api.trakt.tv')
@@ -147,10 +153,12 @@ def read_config(options):
                 sys.exit(1)
         _trakt['config_parser'] = config 
         _trakt['config_path'] = _configfile
+        print("Done reading " + _trakt['config_path'])
 
 def read_csv(options):
         """Read CSV of Movies or TVShows IDs and return a dict"""
         reader = csv.DictReader(options.input, delimiter=',')
+        print("Done reading " + str(options.input))
         return list(reader)
 
 def api_auth(options):
@@ -181,46 +189,68 @@ def api_auth(options):
             print('Saved as "access_token" in file {0}: {1}'.format(options.config, response["access_token"]))
             print('Saved as "refresh_token" in file {0}: {1}'.format(options.config, response["refresh_token"]))
 
-def api_search_by_id(options, id):
-        """API call for Search / ID Lookup / Get ID lookup results"""
-        url = _trakt['baseurl'] + '/search?id_type={0}&id={1}'.format(options.format, id)
-        if options.verbose:
-            print(url)
-        if _proxy['proxy']:
-            r = requests.get(url, headers=_headers, proxies=_proxyDict, timeout=(10, 60))
-        else:
-            r = requests.get(url, headers=_headers, timeout=(5, 60))
-        if r.status_code != 200:
-            print("Error Get ID lookup results: {0} [{1}]".format(r.status_code, r.text))
-            return None
-        else:
-            return json.loads(r.text)
+def api_get_request(options, url, page): 
+    """Uses Trakt API to sends a request to the URL given and returns the results as a response array, starting with page.
+    """
+
+    if options.verbose:
+        print(url)
+    if _proxy['proxy']:
+        r = requests.get(url, headers=_headers, proxies=_proxyDict, timeout=(10, 60))
+    else:
+        r = requests.get(url, headers=_headers, timeout=(5, 60))
+    #pp.pprint(r.headers) 
+    if r.status_code != 200:
+        print("Error fetching GET response for {list}: {status} [{text}]".format(
+                list=options.list, status=r.status_code, text=r.text))
+        return None
+    else:
+        global response_arr
+        response_arr += json.loads(r.text)
+
+    return response_arr
+
+    # if 'X-Pagination-Page-Count'in r.headers and r.headers['X-Pagination-Page-Count'] != "0":
+    if 'X-Pagination-Page-Count'in r.headers and r.headers['X-Pagination-Page-Count']:
+        if int(r.headers['X-Pagination-Page-Count']) == 0: 
+            print("No pages found in response, trakt list may be empty")
+            return response_arr
+
+        print("Fetched page {page} of {PageCount} pages for {list}".format(
+                page=page, PageCount=r.headers['X-Pagination-Page-Count'], list=options.list))
+        if page != int(r.headers['X-Pagination-Page-Count']):
+            api_get_request(options, page + 1)
+
+def api_get_userlists(options, page):
+        """Get list of all user lists
+        """
+        url = _trakt['baseurl'] + '/users/{user}/lists'.format(
+                            user=_trakt['username'], page=page, limit=1000)
+        #url = _trakt['baseurl'] + '/users/{user}/lists/{list_id}?page={page}&limit={limit}'.format(
+        #                    list=options.list, type=options.type, page=page, limit=1000)
+        return api_get_request(options, url, page)
+
+# def api_search_by_id(options, id):
+#         """API call for Search / ID Lookup / Get ID lookup results"""
+#         url = _trakt['baseurl'] + '/search?id_type={0}&id={1}'.format(options.format, id)
+#         if options.verbose:
+#             print(url)
+#         if _proxy['proxy']:
+#             r = requests.get(url, headers=_headers, proxies=_proxyDict, timeout=(10, 60))
+#         else:
+#             r = requests.get(url, headers=_headers, timeout=(5, 60))
+#         if r.status_code != 200:
+#             print("Error Get ID lookup results: {0} [{1}]".format(r.status_code, r.text))
+#             return None
+#         else:
+#             return json.loads(r.text)
 
 def api_get_list(options, page):
-        """API call for Sync / Get list by type"""
+        """Get items of default list (e.g history) by type starting from page
+        """
         url = _trakt['baseurl'] + '/sync/{list}/{type}?page={page}&limit={limit}'.format(
                             list=options.list, type=options.type, page=page, limit=1000)
-        if options.verbose:
-            print(url)
-        if _proxy['proxy']:
-            r = requests.get(url, headers=_headers, proxies=_proxyDict, timeout=(10, 60))
-        else:
-            r = requests.get(url, headers=_headers, timeout=(5, 60))
-        #pp.pprint(r.headers)
-        if r.status_code != 200:
-            print("Error fetching Get {list}: {status} [{text}]".format(
-                    list=options.list, status=r.status_code, text=r.text))
-            return None
-        else:
-            global response_arr
-            response_arr += json.loads(r.text)
-        if 'X-Pagination-Page-Count'in r.headers and r.headers['X-Pagination-Page-Count']:
-            print("Fetched page {page} of {PageCount} pages for {list} list".format(
-                    page=page, PageCount=r.headers['X-Pagination-Page-Count'], list=options.list))
-            if page != int(r.headers['X-Pagination-Page-Count']):
-                api_get_list(options, page+1)
-
-        return response_arr
+        return api_get_request(options, url, page)
 
 # @limits(calls=1, period=1)
 def api_add_to_list(options, import_data):
@@ -228,7 +258,10 @@ def api_add_to_list(options, import_data):
         
         # Rate limit for API 
         time.sleep(1)
-        url = _trakt['baseurl'] + '/sync/{list}'.format(list=options.list)
+        if options.userlist:
+            url = _trakt['baseurl'] + '/users/{username}/lists/{list_id}/items'.format(username=_trakt['username'], list_id=options.listid)
+        else:
+            url = _trakt['baseurl'] + '/sync/{list}'.format(list=options.list)
         #values = '{ "movies": [ { "ids": { "imdb": "tt0000111" } }, { "ids": { , "imdb": "tt1502712" } } ] }'
         #values = '{ "movies": [ { "watched_at": "2014-01-01T00:00:00.000Z", "ids": { "imdb": "tt0000111" } }, { "watched_at": "2013-01-01T00:00:00.000Z", "ids": { "imdb": "tt1502712" } } ] }'
         if options.type == 'episodes':
@@ -332,7 +365,7 @@ def main():
                       help='CSV file to import, default %(default)s',
                       nargs='?', type=argparse.FileType('r'), default=None, required=True)
         parser.add_argument('-w', '--watched_at',
-                      help='import watched_at date from CSV, it\'s must be UTC datetime, default %(default)s',
+                      help='import watched_at date from CSV, the format must be UTC datetime, default %(default)s',
                       default=False, action='store_true', dest='watched_at')
         parser.add_argument('-f', '--format',
                       help='allow to overwrite default ID type format, default %(default)s',
@@ -343,9 +376,13 @@ def main():
         parser.add_argument('-l', '--list',
                       help='allow to overwrite default list, default %(default)s',
                       choices=['watchlist', 'collection', 'history'], dest='list', default='watchlist')
+        parser.add_argument('-u', '--userlist',
+                help='allow to add item(s) to a user custom list, default %(default)s',
+                dest='userlist', default=False, action='store_true')
+        now = datetime.now()
         parser.add_argument('-s', '--seen',
-                      help='mark as seen, default %(default)s. Use specific time if provided, falback time: "2016-01-01T00:00:00.000Z"',
-                      nargs='?', const='2016-01-01T00:00:00.000Z',
+                      help='use custom time for watched_at if importing to history, default %(default)s. Use specific time if provided, default is current time',
+                      nargs='?', const=now.strftime('%Y-%m-%dT%H:%M:%S.000Z'),
                       action='store', type=str, dest='seen', default=False)
         parser.add_argument('-C', '--clean',
                       help='empty list prior to import, default %(default)s',
@@ -355,7 +392,7 @@ def main():
         #              default=True, action='store_true', dest='dryrun')
         parser.add_argument('-V', '--verbose',
                       help='print additional verbose information, default %(default)s',
-                      default=True, action='store_true', dest='verbose')
+                      default=False, action='store_true', dest='verbose')
         options = parser.parse_args()
 
         # Display debug information
@@ -368,7 +405,7 @@ def main():
 
         if options.seen:
             try:
-                datetime.datetime.strptime(options.seen, '%Y-%m-%dT%H:%M:%S.000Z')
+                datetime.strptime(options.seen, '%Y-%m-%dT%H:%M:%S.000Z')
             except:
                 sys.exit("Error, invalid format, it's must be UTC datetime, eg: '2016-01-01T00:00:00.000Z'")
 
@@ -387,7 +424,6 @@ def main():
 
             url = _trakt['baseurl'] + '/oauth/token'
             r = requests.post(url, data=values)
-            print(r.status_code)
             if r.status_code == 200: 
                 response = r.json()
                 _trakt['access_token'] = response["access_token"]
@@ -412,6 +448,34 @@ def main():
         if options.verbose:
             print("API Trakt: {}".format(_trakt))
             print("Authorization header: {}".format(_headers['Authorization']))
+        
+        if options.userlist:
+            export_data = api_get_userlists(options, 1)
+            if export_data:
+                print("Found {0} user list(s)".format(len(export_data)))
+                print("")
+                #pp.pprint(export_data)
+                # TODO: add export all user lists functionality
+                print("id       | name")
+                for data in export_data:
+                    print("{id} | {name}".format(name=data['name'], id = data['ids']['trakt']))
+                    #print("{id} | {name} | {items}".format(
+                    #       name=data['name'], id=data['ids']['trakt'], items=data['item_count'], own=data['user']['username']))
+                print("")
+                print("Type in the id matching with the name of the list you want to import item(s) to.")
+                options.listid = str(input('Input: '))
+                options.list = data['user']['username'] + "'s user list with id: '" + options.listid + "'"
+                response_arr = []
+            else:
+                print("Error, no user lists found".format(
+                    type=options.type, list=options.userlist))
+                sys.exit(1)
+        else:
+            export_data = api_get_list(options, 1)
+            if not export_data:
+                print("Error, no item(s) found for {type} from {list}".format(
+                    type=options.type, list=options.list))
+                sys.exit(1)
 
         # Empty list prior to import
         if options.clean:
@@ -423,24 +487,45 @@ def main():
         # if IDs make the list into trakt format
         data = []
         results = {'sentids' : 0, 'added' : 0, 'existing' : 0, 'not_found' : 0}
+
+        if options.list == 'history':
+            options.time_key = 'watched_at'
+        elif options.list == 'watchlist':
+            options.time_key = 'listed_at'
+        elif options.list == 'collection':
+            options.time_key = 'collected_at'
+        elif options.userlist != None:
+            options.time_key = 'listed_at'
+
         if read_ids:
             print("Found {0} items to import".format(len(read_ids)))
 
             for myid in read_ids:
+                print(myid)
                 # If id (row) exists and is not blank (has a format)
                 if myid and myid[options.format]:
+                    # Record time format in csv we're importing from. 
+                    # NOTE: Trakt API does not allow for custom times for listed_at and collected_at.
+                    # Therefore, options.time_key doesn't do anything for lists other than history.
+                    # However, this allows importing from custom lists in to history 
+                    if 'watched_at' in myid: 
+                        options.csv_time = 'watched_at'
+                    elif 'listed_at' in myid:
+                        options.csv_time = 'listed_at'
+                    elif 'collected_at' in myid:
+                        options.csv_time = 'collected_at'
                     #pp.pprint(myid)
                     # If format is not "imdb" it must be cast to an integer
                     if not options.format == "imdb" and not myid[options.format].startswith('tt'):
                         myid[options.format] = int(myid[options.format])
                     if (options.type == "movies" or options.type == "shows") and options.seen:
-                        data.append({'ids':{options.format : myid[options.format]}, "watched_at": options.seen})
+                        data.append({'ids':{options.format : myid[options.format]}, options.time_key: options.seen})
                     elif (options.type == "movies" or options.type == "shows") and options.watched_at:
-                        data.append({'ids':{options.format : myid[options.format]}, "watched_at": myid["watched_at"]})
+                        data.append({'ids':{options.format : myid[options.format]}, options.time_key: myid[options.csv_time]})
                     elif options.type == "episodes" and options.seen:
-                        data.append({'ids':{options.format : myid[options.format]},"watched_at": options.seen})
+                        data.append({'ids':{options.format : myid[options.format]}, options.time_key: options.seen})
                     elif options.type == "episodes" and options.watched_at:
-                        data.append({'ids':{options.format : myid[options.format]},"watched_at": myid["watched_at"]})
+                        data.append({'ids':{options.format : myid[options.format]}, options.time_key: myid[options.csv_time]})
                     else:
                         data.append({'ids':{options.format : myid[options.format]}})
                     # Import batch of 10 IDs
