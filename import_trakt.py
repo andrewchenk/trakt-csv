@@ -264,7 +264,7 @@ def main():
                 sys.exit("Error, invalid format, it's must be UTC datetime, eg: '2016-01-01T00:00:00.000Z'")
 
         ## Read configuration and validate
-        config = helpers.read_config(_trakt, options)
+        helpers.read_config(_trakt, options)
 
         ## Try refreshing to get new access token. If it doesn't work, user needs to authenticate again.
         helpers.api_auth_refresh(_trakt, _headers, options)
