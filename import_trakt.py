@@ -227,7 +227,7 @@ def main():
                       action='store', type=str, dest='seen', default=False)
         parser.add_argument('-f', '--format',
                       help='allow to overwrite default ID type format, default %(default)s',
-                      choices=['imdb', 'tmdb', 'tvdb', 'tvrage', 'trakt'], dest='format', default='imdb')
+                      choices=['imdb', 'tmdb', 'tvdb', 'tvrage', 'trakt'], dest='format', default='trakt')
         parser.add_argument('-t', '--type',
                       help='allow to overwrite type, default %(default)s',
                       choices=['movies', 'shows', 'episodes'], dest='type', default='movies')

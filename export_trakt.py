@@ -252,6 +252,7 @@ def main():
         """
         ## Parse inputs if any
         parser = argparse.ArgumentParser(description=desc, epilog=epilog)
+        list_group = parser.add_mutually_exclusive_group(required=True)
         parser.add_argument('-v', action='version', version='%(prog)s 0.3')
         parser.add_argument('-c', '--config',
                       help='allow to overwrite default config filename, default %(default)s',
@@ -262,10 +263,10 @@ def main():
         parser.add_argument('-t', '--type',
                       help='allow to overwrite type, default %(default)s',
                       choices=['movies', 'shows', 'episodes'], dest='type', default='movies')
-        parser.add_argument('-l', '--list',
+        list_group.add_argument('-l', '--list',
                       help='allow to overwrite default list, default %(default)s',
                       choices=['watchlist', 'collection', 'history'], dest='list', default='history')
-        parser.add_argument('-u', '--userlist',
+        list_group.add_argument('-u', '--userlist',
                       help='allow to export a user custom list, default %(default)s',
                       dest='userlist', default=False, action='store_true')
         parser.add_argument('-C', '--clean',
