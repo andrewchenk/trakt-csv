@@ -153,7 +153,7 @@ def process_export_data(options, export_data):
         # If movie or show
         #if options.type[:-1] != "episode" and 'imdb' in data[options.type[:-1]]['ids']:
         #print(data)
-        if data['type'] == 'movie':
+        if 'movie' in data: 
             # Since exporting from Trakt, use Trakt id for finding dupids
             find_dupids.append(data[options.type[:-1]]['ids']['trakt'])
             export_csv.append({
@@ -165,7 +165,7 @@ def process_export_data(options, export_data):
                 'tmdb': data[options.type[:-1]]['ids']['tmdb']
             })
         # If episode
-        elif data['type'] == 'episode':
+        elif 'episode' in data: 
             find_dupids.append(data[options.type[:-1]]['ids']['trakt'])
             if not data['episode']['title']:
                 data['episode']['title'] = "no episode title"
