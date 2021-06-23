@@ -430,34 +430,29 @@ def main():
                     options.csv_time = 'listed_at'
                 if options.verbose:
                     pp.pprint(myid)
-                row_title = ""
-                row_time = ""
-                if options.seen or options.userlist:
+                row_title = "No title in csv"
+                if options.seen:
                     row_time = options.seen
-                else:
+                elif options.watched_at:
                     row_time = myid[options.csv_time]
+                else: 
+                    row_time = "No time option"
+
                 # If format is not "imdb" it must be cast to an integer
                 if not options.format == "imdb" and not myid[
                         options.format].startswith('tt'):
                     myid[options.format] = int(myid[options.format])
-                if (options.type == "movies" or options.type == "shows"):
+                if 'title' in myid:
                     row_title = "title: " + myid['title']
+                if 'show_title' in myid and 'episode_title' in myid: 
+                    row_title = "title: " + myid['show_title'] + ", episode_title: " + myid['episode_title']
+
+                if (options.type == "movies" or options.type == "shows" or options.type == "episodes"):
                     data.append({
                         'ids': {
                             options.format: myid[options.format]
                         },
-                        options.time_key: row_time
-                    })
-                elif options.type == "episodes":
-                    row_title = "title: " + myid[
-                        'show_title'] + ", episode_title: " + myid[
-                            'episode_title']
-                    data.append({
-                        'ids': {
-                            options.format: myid[options.format]
-                        },
-                        options.time_key: row_time
-                    })
+                    options.time_key: row_time})
                 else:
                     data.append(
                         {'ids': {
