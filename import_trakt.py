@@ -426,11 +426,13 @@ def main():
                     options.csv_time = 'listed_at'
                 elif 'collected_at' in myid:
                     options.csv_time = 'collected_at'
+                else: 
+                    options.csv_time = 'listed_at'
                 if options.verbose:
                     pp.pprint(myid)
                 row_title = ""
                 row_time = ""
-                if options.seen:
+                if options.seen or options.userlist:
                     row_time = options.seen
                 else:
                     row_time = myid[options.csv_time]
