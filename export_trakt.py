@@ -34,6 +34,7 @@ import configparser
 import datetime
 import collections
 import pprint
+import time
 
 import helpers
 
@@ -84,6 +85,9 @@ response_arr = []
 def write_csv(options, results):
     """Write list output into a CSV file format
         """
+    if len(results) == 0:
+        return None
+
     print("Writing to: {0}".format(options.output))
     # Write result CSV, works with windows now
     with open(options.output, 'w', encoding='utf-8', newline='') as fp:
@@ -100,10 +104,9 @@ def write_csv(options, results):
 def api_remove_from_list(options, remove_data, is_id=False):
     """API call for Sync / Remove from list
         """
+    time.sleep(1)
     url = _trakt['baseurl'] + '/sync/{list}/remove'.format(list=options.list)
-    if options.type == 'episodes':
-        values = {'shows': remove_data}
-    elif not is_id:
+    if not is_id:
         values = {options.type: remove_data}
     else:
         values = {'ids': remove_data}
@@ -199,10 +202,10 @@ def process_export_data(options, export_data):
                 result = api_remove_from_list(options, to_remove)
                 if result:
                     print("Result: {0}".format(result))
-                    if 'deleted' in result and result['deleted']:
+                    if 'deleted' in result and result['deleted'] and options.type != "shows":
                         cleanup_results['deleted'] += result['deleted'][
                             options.type]
-                    if 'not_found' in result and result['not_found']:
+                    if 'not_found' in result and result['not_found'] and options.type != "shows":
                         cleanup_results['not_found'] += len(
                             result['not_found'][options.type])
                 to_remove = []
@@ -213,10 +216,10 @@ def process_export_data(options, export_data):
             result = api_remove_from_list(options, to_remove)
             if result:
                 print("Result: {0}".format(result))
-                if 'deleted' in result and result['deleted']:
+                if 'deleted' in result and result['deleted'] and options.type != "shows":
                     cleanup_results['deleted'] += result['deleted'][
                         options.type]
-                if 'not_found' in result and result['not_found']:
+                if 'not_found' in result and result['not_found'] and options.type != "shows":
                     cleanup_results['not_found'] += len(
                         result['not_found'][options.type])
         print(
