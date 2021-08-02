@@ -170,16 +170,21 @@ def process_export_data(options, export_data):
             if not data['episode']['title']:
                 data['episode']['title'] = "no episode title"
 
-            export_csv.append({
+            row = {
                 options.time: data[options.time],
                 'season': data[options.type[:-1]]['season'],
                 'episode': data[options.type[:-1]]['number'],
                 'episode_title': data['episode']['title'],
-                'show_title': data['show']['title'],
+                'show_title': '',
                 'trakt': data[options.type[:-1]]['ids']['trakt'],
                 'tvdb': data[options.type[:-1]]['ids']['tvdb'],
                 'tmdb': data[options.type[:-1]]['ids']['tmdb']
-            })
+            }
+            if options.list == "collection":
+                del row['show_title']
+            else:
+                row['show_title'] = data['show']['title']
+            export_csv.append(row)
     # TODO: Don't know if options.clean works
     ## Empty list after export
     if options.clean:
@@ -358,12 +363,6 @@ def main():
     ## Display debug information
     if options.verbose:
         print("Options: %s" % options)
-
-    if options.type == 'episodes' and options.list == "collection":
-        print(
-            "Error, you can only fetch {0} from the history or watchlist list".
-            format(options.type))
-        sys.exit(1)
 
     if options.userlist:
         options.list = "user list"
