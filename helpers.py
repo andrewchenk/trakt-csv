@@ -270,13 +270,13 @@ def api_get_request(_headers, _proxyDict, options, url, page):
     if options.verbose:
         print(url)
     if _proxy['proxy']:
-        r = requests.get(url,
+        r = requests.get(url + "&page={0}".format(page),
                          headers=_headers,
                          proxies=_proxyDict,
                          timeout=(10, 60))
     else:
-        r = requests.get(url, headers=_headers, timeout=(5, 60))
-    #pp.pprint(r.headers)
+        r = requests.get(url + "&page={0}".format(page), headers=_headers, timeout=(5, 60))
+
     if r.status_code != 200:
         print(
             "Error fetching GET response for {list}: {status} [{text}]".format(
@@ -285,10 +285,9 @@ def api_get_request(_headers, _proxyDict, options, url, page):
     else:
         json_dict = json.loads(r.text)
         if type(json_dict) is list:
-            response_arr += json.loads(r.text)
+            response_arr += json_dict
         else:
             response_arr.append(json_dict)
-    #print(response_arr)
 
     # if 'X-Pagination-Page-Count'in r.headers and r.headers['X-Pagination-Page-Count'] != "0":
     if 'X-Pagination-Page-Count' in r.headers and r.headers[
@@ -302,7 +301,7 @@ def api_get_request(_headers, _proxyDict, options, url, page):
             PageCount=r.headers['X-Pagination-Page-Count'],
             list=options.list))
         if page != int(r.headers['X-Pagination-Page-Count']):
-            api_get_request(_headers, _proxyDict, options, url, page + 1)
+            response_arr += api_get_request(_headers, _proxyDict, options, url, page + 1)
 
     return response_arr
 
@@ -311,7 +310,7 @@ def api_get_list(_trakt, _headers, _proxyDict, options, page):
     """Get items of default list (e.g history) by type starting from page
         """
     url = _trakt[
-        'baseurl'] + '/sync/{list}/{type}?page={page}&limit={limit}'.format(
+        'baseurl'] + '/sync/{list}/{type}?limit={limit}'.format(
             list=options.list, type=options.type, page=page, limit=1000)
     return api_get_request(_headers, _proxyDict, options, url, page)
 
@@ -319,18 +318,15 @@ def api_get_list(_trakt, _headers, _proxyDict, options, page):
 def api_get_userlists(_trakt, _headers, _proxyDict, options, page):
     """Get list of all user lists
         """
-    url = _trakt['baseurl'] + '/users/{user}/lists'.format(
+    url = _trakt['baseurl'] + '/users/{user}/lists?limit={limit}'.format(
         user=_trakt['username'], page=page, limit=1000)
-    #url = _trakt['baseurl'] + '/users/{user}/lists/{list_id}?page={page}&limit={limit}'.format(
-    #                    list=options.list, type=options.type, page=page, limit=1000)
-    # print(url)
     return api_get_request(_headers, _proxyDict, options, url, page)
 
 
 def api_get_userlist(_trakt, _headers, _proxyDict, options, page):
     """Get items of user list by type
         """
-    url = _trakt['baseurl'] + '/users/{user}/lists/{list_id}'.format(
+    url = _trakt['baseurl'] + '/users/{user}/lists/{list_id}?limit={limit}'.format(
         user=_trakt['username'],
         list_id=options.listid,
         type=options.type,
@@ -343,7 +339,7 @@ def api_get_userlist_items(_trakt, _headers, _proxyDict, options, page):
     """Get items of user list by type
         """
     url = _trakt[
-        'baseurl'] + '/users/{user}/lists/{list_id}/items/{type}?page={page}&limit={limit}'.format(
+        'baseurl'] + '/users/{user}/lists/{list_id}/items/{type}&limit={limit}'.format(
             user=_trakt['username'],
             list_id=options.listid,
             type=options.type,
